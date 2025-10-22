@@ -1,0 +1,786 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Shithead - Multiplayer Card Game</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.5.4/socket.io.min.js"></script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+      color: #fff;
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 1400px;
+      padding: 20px;
+    }
+
+    .lobby, .game-screen, .game-over {
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(10px);
+      border-radius: 20px;
+      padding: 40px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    h1 {
+      text-align: center;
+      margin-bottom: 30px;
+      font-size: 3em;
+      text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+    }
+
+    .lobby-form {
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+      max-width: 400px;
+      margin: 0 auto;
+    }
+
+    input {
+      padding: 15px;
+      border: none;
+      border-radius: 10px;
+      font-size: 1em;
+      background: rgba(255, 255, 255, 0.9);
+    }
+
+    button {
+      padding: 15px 30px;
+      border: none;
+      border-radius: 10px;
+      font-size: 1.1em;
+      font-weight: bold;
+      cursor: pointer;
+      background: #4CAF50;
+      color: white;
+      transition: all 0.3s;
+    }
+
+    button:hover {
+      background: #45a049;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+    }
+
+    button:disabled {
+      background: #666;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .game-info {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
+    .game-code {
+      font-size: 2em;
+      font-weight: bold;
+      color: #ffd700;
+      text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+    }
+
+    .players-list {
+      margin: 20px 0;
+      padding: 20px;
+      background: rgba(0, 0, 0, 0.2);
+      border-radius: 10px;
+    }
+
+    .player-item {
+      padding: 10px;
+      margin: 5px 0;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 5px;
+    }
+
+    .game-board {
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      gap: 20px;
+      min-height: 600px;
+    }
+
+    .opponents {
+      display: flex;
+      justify-content: space-around;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .player-area {
+      background: rgba(0, 0, 0, 0.2);
+      border-radius: 10px;
+      padding: 15px;
+      min-width: 200px;
+    }
+
+    .player-area.current-turn {
+      border: 3px solid #ffd700;
+      box-shadow: 0 0 20px rgba(255, 215, 0, 0.5);
+    }
+
+    .player-name {
+      font-weight: bold;
+      margin-bottom: 10px;
+      text-align: center;
+    }
+
+    .center-area {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 20px;
+    }
+
+    .pile-area {
+      text-align: center;
+    }
+
+    .pile-card {
+      width: 120px;
+      height: 180px;
+      background: white;
+      border-radius: 10px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      font-size: 2.5em;
+      font-weight: bold;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+      margin: 10px auto;
+    }
+
+    .pile-card.red {
+      color: #e74c3c;
+    }
+
+    .pile-card.black {
+      color: #2c3e50;
+    }
+
+    .empty-pile {
+      width: 120px;
+      height: 180px;
+      border: 3px dashed rgba(255, 255, 255, 0.3);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 10px auto;
+      color: rgba(255, 255, 255, 0.5);
+    }
+
+    .action-info {
+      background: rgba(0, 0, 0, 0.3);
+      padding: 15px;
+      border-radius: 10px;
+      margin-top: 10px;
+      min-height: 60px;
+    }
+
+    .current-player-area {
+      background: rgba(0, 0, 0, 0.3);
+      border-radius: 10px;
+      padding: 20px;
+    }
+
+    .cards-row {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      margin: 10px 0;
+      flex-wrap: wrap;
+    }
+
+    .card {
+      width: 80px;
+      height: 120px;
+      background: white;
+      border-radius: 8px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.8em;
+      font-weight: bold;
+      cursor: pointer;
+      transition: all 0.3s;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    }
+
+    .card:hover {
+      transform: translateY(-10px);
+      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.4);
+    }
+
+    .card.red {
+      color: #e74c3c;
+    }
+
+    .card.black {
+      color: #2c3e50;
+    }
+
+    .card.face-down {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: transparent;
+    }
+
+    .card.face-down::before {
+      content: '?';
+      color: white;
+      font-size: 2em;
+    }
+
+    .card-label {
+      text-align: center;
+      font-weight: bold;
+      margin-bottom: 5px;
+      color: #ffd700;
+    }
+
+    .opponent-cards {
+      display: flex;
+      gap: 5px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .mini-card {
+      width: 40px;
+      height: 60px;
+      background: white;
+      border-radius: 5px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.9em;
+      font-weight: bold;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    }
+
+    .mini-card.red {
+      color: #e74c3c;
+    }
+
+    .mini-card.black {
+      color: #2c3e50;
+    }
+
+    .mini-card.face-down {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+    }
+
+    .chat-area {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      width: 300px;
+      background: rgba(0, 0, 0, 0.8);
+      border-radius: 10px;
+      padding: 15px;
+      max-height: 400px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .chat-messages {
+      flex: 1;
+      overflow-y: auto;
+      margin-bottom: 10px;
+      max-height: 300px;
+    }
+
+    .chat-message {
+      padding: 5px;
+      margin: 3px 0;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 5px;
+      font-size: 0.9em;
+    }
+
+    .chat-input {
+      display: flex;
+      gap: 5px;
+    }
+
+    .chat-input input {
+      flex: 1;
+      padding: 8px;
+    }
+
+    .chat-input button {
+      padding: 8px 15px;
+      font-size: 0.9em;
+    }
+
+    .error-message {
+      background: #e74c3c;
+      color: white;
+      padding: 15px;
+      border-radius: 10px;
+      margin: 10px 0;
+      text-align: center;
+      font-weight: bold;
+    }
+
+    .game-over {
+      text-align: center;
+    }
+
+    .winner-announcement {
+      font-size: 3em;
+      color: #ffd700;
+      margin: 20px 0;
+      text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+    }
+
+    .action-buttons {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+      margin-top: 15px;
+    }
+
+    .action-buttons button {
+      padding: 10px 20px;
+      font-size: 1em;
+    }
+
+    .rules-toggle {
+      background: rgba(255, 255, 255, 0.2);
+      padding: 10px 20px;
+      border-radius: 10px;
+      margin: 20px 0;
+      cursor: pointer;
+    }
+
+    .rules-content {
+      margin-top: 10px;
+      line-height: 1.6;
+    }
+
+    .special-card-info {
+      background: rgba(255, 215, 0, 0.2);
+      padding: 10px;
+      border-radius: 5px;
+      margin-top: 10px;
+      font-size: 0.9em;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="lobby" id="lobbyScreen">
+      <h1>♠️ Shithead ♥️</h1>
+      
+      <div class="rules-toggle" onclick="toggleRules()">
+        📖 Game Rules (Click to expand)
+      </div>
+      <div class="rules-content hidden" id="rulesContent">
+        <p><strong>Goal:</strong> Be the first to get rid of all your cards!</p>
+        <p><strong>Setup:</strong> Each player gets 3 face-down cards, 3 face-up cards on top, and 3-5 cards in hand.</p>
+        <p><strong>Special Cards:</strong></p>
+        <ul style="margin-left: 20px; margin-top: 10px;">
+          <li><strong>2:</strong> Wild card - resets the rank</li>
+          <li><strong>7:</strong> Next player must play lower</li>
+          <li><strong>8:</strong> Skips next player</li>
+          <li><strong>10:</strong> Burns the pile, play again</li>
+          <li><strong>4 of a kind:</strong> Auto-burns the pile</li>
+        </ul>
+        <p style="margin-top: 10px;"><strong>Rules:</strong> Play equal or higher than the pile. If you can't play, pick up the pile.</p>
+      </div>
+
+      <div class="lobby-form">
+        <input type="text" id="playerNameInput" placeholder="Enter your name" maxlength="20">
+        <button onclick="createGame()">Create Game</button>
+        <div style="text-align: center; margin: 10px 0;">- OR -</div>
+        <input type="text" id="gameCodeInput" placeholder="Enter game code" maxlength="6" style="text-transform: uppercase;">
+        <button onclick="joinGame()">Join Game</button>
+      </div>
+
+      <div id="errorMessage" class="error-message hidden"></div>
+
+      <div id="waitingArea" class="hidden">
+        <div class="game-info">
+          <div>Game Code:</div>
+          <div class="game-code" id="gameCode"></div>
+        </div>
+        <div class="players-list">
+          <h3>Players in Lobby:</h3>
+          <div id="playersList"></div>
+        </div>
+        <button id="startButton" class="hidden" onclick="startGame()">Start Game</button>
+      </div>
+    </div>
+
+    <div class="game-screen hidden" id="gameScreen">
+      <div class="game-board">
+        <div class="opponents" id="opponentsArea"></div>
+        <div class="center-area">
+          <div class="pile-area">
+            <h3>Pile</h3>
+            <div id="pileDisplay"></div>
+            <div class="action-info" id="actionInfo"></div>
+          </div>
+          <div class="special-card-info">
+            <strong>Special Cards:</strong> 2=Wild | 7=Play Lower | 8=Skip | 10=Burn
+          </div>
+        </div>
+        <div class="current-player-area">
+          <h3 style="text-align: center; margin-bottom: 15px;">Your Cards</h3>
+          <div id="handArea">
+            <div class="card-label">Hand</div>
+            <div class="cards-row" id="handCards"></div>
+          </div>
+          <div id="faceUpArea" style="margin-top: 20px;">
+            <div class="card-label">Face-Up Cards</div>
+            <div class="cards-row" id="faceUpCards"></div>
+          </div>
+          <div id="faceDownArea" style="margin-top: 20px;">
+            <div class="card-label">Face-Down Cards</div>
+            <div class="cards-row" id="faceDownCards"></div>
+          </div>
+          <div class="action-buttons">
+            <button id="pickupButton" onclick="pickupPile()">Pick Up Pile</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="game-over hidden" id="gameOverScreen">
+      <h1>Game Over!</h1>
+      <div class="winner-announcement" id="winnerAnnouncement"></div>
+      <button onclick="location.reload()">Back to Lobby</button>
+    </div>
+
+    <div class="chat-area hidden" id="chatArea">
+      <h4 style="margin-bottom: 10px;">Chat</h4>
+      <div class="chat-messages" id="chatMessages"></div>
+      <div class="chat-input">
+        <input type="text" id="chatInput" placeholder="Type a message..." maxlength="100">
+        <button onclick="sendChat()">Send</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let socket;
+    let gameState = null;
+    let myPlayerId = null;
+
+    function init() {
+      socket = io();
+
+      socket.on('connect', () => {
+        console.log('Connected to server');
+        myPlayerId = socket.id;
+      });
+
+      socket.on('gameCreated', (data) => {
+        document.getElementById('gameCode').textContent = data.gameId;
+        document.getElementById('waitingArea').classList.remove('hidden');
+        document.getElementById('startButton').classList.remove('hidden');
+        gameState = data.gameState;
+        updatePlayersList();
+      });
+
+      socket.on('gameUpdate', (state) => {
+        gameState = state;
+        if (state.started) {
+          showGameScreen();
+          updateGameBoard();
+        } else {
+          updatePlayersList();
+        }
+      });
+
+      socket.on('playerJoined', (data) => {
+        addChatMessage('System', `${data.name} joined the game`);
+      });
+
+      socket.on('playerLeft', (data) => {
+        addChatMessage('System', `${data.name} left the game`);
+      });
+
+      socket.on('gameOver', (data) => {
+        showGameOver(data.winner);
+      });
+
+      socket.on('error', (message) => {
+        showError(message);
+      });
+
+      socket.on('chatMessage', (data) => {
+        addChatMessage(data.player, data.message);
+      });
+
+      document.getElementById('playerNameInput').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') createGame();
+      });
+
+      document.getElementById('gameCodeInput').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') joinGame();
+      });
+
+      document.getElementById('chatInput').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') sendChat();
+      });
+    }
+
+    function createGame() {
+      const name = document.getElementById('playerNameInput').value.trim();
+      if (!name) {
+        showError('Please enter your name');
+        return;
+      }
+      socket.emit('createGame', name);
+    }
+
+    function joinGame() {
+      const name = document.getElementById('playerNameInput').value.trim();
+      const code = document.getElementById('gameCodeInput').value.trim().toUpperCase();
+      if (!name || !code) {
+        showError('Please enter your name and game code');
+        return;
+      }
+      socket.emit('joinGame', { gameId: code, playerName: name });
+      document.getElementById('gameCode').textContent = code;
+      document.getElementById('waitingArea').classList.remove('hidden');
+    }
+
+    function startGame() {
+      socket.emit('startGame');
+    }
+
+    function showGameScreen() {
+      document.getElementById('lobbyScreen').classList.add('hidden');
+      document.getElementById('gameScreen').classList.remove('hidden');
+      document.getElementById('chatArea').classList.remove('hidden');
+    }
+
+    function updatePlayersList() {
+      const list = document.getElementById('playersList');
+      list.innerHTML = '';
+      gameState.players.forEach(player => {
+        const div = document.createElement('div');
+        div.className = 'player-item';
+        div.textContent = player.name + (player.id === gameState.hostId ? ' (Host)' : '');
+        list.appendChild(div);
+      });
+    }
+
+    function updateGameBoard() {
+      updateOpponents();
+      updatePile();
+      updateCurrentPlayer();
+      updateActionInfo();
+    }
+
+    function updateOpponents() {
+      const opponentsArea = document.getElementById('opponentsArea');
+      opponentsArea.innerHTML = '';
+
+      gameState.players.forEach((player) => {
+        if (player.id === myPlayerId) return;
+
+        const div = document.createElement('div');
+        div.className = 'player-area';
+        if (player.id === gameState.currentPlayerId) {
+          div.classList.add('current-turn');
+        }
+
+        let html = `<div class="player-name">${player.name}</div>`;
+        html += `<div style="font-size: 0.9em; text-align: center; margin: 5px 0;">Hand: ${player.handCount} cards</div>`;
+
+        // Face-up cards - show them prominently
+        if (player.faceUp && player.faceUp.length > 0) {
+          html += '<div style="margin: 10px 0; text-align: center; font-size: 0.85em; color: #ffd700;">Face-Up:</div>';
+          html += '<div class="opponent-cards">';
+          player.faceUp.forEach(card => {
+            const color = (card.suit === '♥' || card.suit === '♦') ? 'red' : 'black';
+            html += `<div class="mini-card ${color}">
+              <div style="font-size: 1.2em;">${card.rank}</div>
+              <div style="font-size: 0.7em;">${card.suit}</div>
+            </div>`;
+          });
+          html += '</div>';
+        }
+
+        // Face-down cards
+        if (player.faceDownCount > 0) {
+          html += '<div style="margin: 10px 0; text-align: center; font-size: 0.85em; color: #ffd700;">Face-Down:</div>';
+          html += '<div class="opponent-cards">';
+          for (let i = 0; i < player.faceDownCount; i++) {
+            html += '<div class="mini-card face-down">?</div>';
+          }
+          html += '</div>';
+        }
+
+        div.innerHTML = html;
+        opponentsArea.appendChild(div);
+      });
+    }
+
+    function updatePile() {
+      const pileDisplay = document.getElementById('pileDisplay');
+      
+      if (gameState.pile.length === 0) {
+        pileDisplay.innerHTML = '<div class="empty-pile">Empty</div>';
+      } else {
+        const topCard = gameState.topCard;
+        const color = (topCard.suit === '♥' || topCard.suit === '♦') ? 'red' : 'black';
+        pileDisplay.innerHTML = `
+          <div class="pile-card ${color}">
+            <div>${topCard.rank}</div>
+            <div style="font-size: 0.6em;">${topCard.suit}</div>
+          </div>
+          <div style="margin-top: 5px;">Cards in pile: ${gameState.pile.length}</div>
+        `;
+      }
+    }
+
+    function updateCurrentPlayer() {
+      const currentPlayer = gameState.players.find(p => p.id === myPlayerId);
+      if (!currentPlayer) return;
+
+      const handCards = document.getElementById('handCards');
+      handCards.innerHTML = '';
+      currentPlayer.hand.forEach((card, index) => {
+        const color = (card.suit === '♥' || card.suit === '♦') ? 'red' : 'black';
+        const div = document.createElement('div');
+        div.className = `card ${color}`;
+        div.innerHTML = `<div>${card.rank}</div><div style="font-size: 0.5em;">${card.suit}</div>`;
+        div.onclick = () => playCard(index, 'hand');
+        handCards.appendChild(div);
+      });
+
+      const faceUpCards = document.getElementById('faceUpCards');
+      faceUpCards.innerHTML = '';
+      currentPlayer.faceUp.forEach((card, index) => {
+        const color = (card.suit === '♥' || card.suit === '♦') ? 'red' : 'black';
+        const div = document.createElement('div');
+        div.className = `card ${color}`;
+        div.innerHTML = `<div>${card.rank}</div><div style="font-size: 0.5em;">${card.suit}</div>`;
+        div.onclick = () => playCard(index, 'faceUp');
+        faceUpCards.appendChild(div);
+      });
+
+      const faceDownCards = document.getElementById('faceDownCards');
+      faceDownCards.innerHTML = '';
+      for (let i = 0; i < currentPlayer.faceDownCount; i++) {
+        const div = document.createElement('div');
+        div.className = 'card face-down';
+        div.onclick = () => playCard(i, 'faceDown');
+        faceDownCards.appendChild(div);
+      }
+
+      document.getElementById('handArea').style.display = currentPlayer.hand.length > 0 ? 'block' : 'none';
+      document.getElementById('faceUpArea').style.display = currentPlayer.faceUp.length > 0 ? 'block' : 'none';
+      document.getElementById('faceDownArea').style.display = currentPlayer.faceDownCount > 0 ? 'block' : 'none';
+    }
+
+    function updateActionInfo() {
+      const info = document.getElementById('actionInfo');
+      let html = '';
+      
+      if (gameState.currentPlayerId === myPlayerId) {
+        html += '<div style="color: #4CAF50; font-weight: bold; font-size: 1.2em;">YOUR TURN</div>';
+      } else {
+        const currentPlayer = gameState.players.find(p => p.id === gameState.currentPlayerId);
+        html += `<div>Waiting for ${currentPlayer ? currentPlayer.name : 'opponent'}...</div>`;
+      }
+
+      if (gameState.mustPlayLower) {
+        html += '<div style="color: #ff6b6b; font-weight: bold; margin-top: 5px;">⚠️ Must play LOWER than 7!</div>';
+      }
+
+      if (gameState.lastAction) {
+        html += `<div style="margin-top: 10px; font-style: italic; opacity: 0.8;">${gameState.lastAction}</div>`;
+      }
+
+      info.innerHTML = html;
+
+      const pickupButton = document.getElementById('pickupButton');
+      pickupButton.disabled = gameState.currentPlayerId !== myPlayerId;
+    }
+
+    function playCard(index, source) {
+      if (gameState.currentPlayerId !== myPlayerId) {
+        showError('Not your turn!');
+        return;
+      }
+      socket.emit('playCard', { cardIndex: index, source: source });
+    }
+
+    function pickupPile() {
+      if (gameState.currentPlayerId !== myPlayerId) return;
+      socket.emit('pickupPile');
+    }
+
+    function sendChat() {
+      const input = document.getElementById('chatInput');
+      const message = input.value.trim();
+      if (!message) return;
+      socket.emit('chatMessage', message);
+      input.value = '';
+    }
+
+    function addChatMessage(player, message) {
+      const chatMessages = document.getElementById('chatMessages');
+      const div = document.createElement('div');
+      div.className = 'chat-message';
+      div.innerHTML = `<strong>${player}:</strong> ${message}`;
+      chatMessages.appendChild(div);
+      chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+
+    function showGameOver(winner) {
+      document.getElementById('gameScreen').classList.add('hidden');
+      document.getElementById('chatArea').classList.add('hidden');
+      document.getElementById('gameOverScreen').classList.remove('hidden');
+      document.getElementById('winnerAnnouncement').textContent = `🎉 ${winner} WINS! 🎉`;
+    }
+
+    function showError(message) {
+      const errorDiv = document.getElementById('errorMessage');
+      errorDiv.textContent = message;
+      errorDiv.classList.remove('hidden');
+      setTimeout(() => {
+        errorDiv.classList.add('hidden');
+      }, 3000);
+    }
+
+    function toggleRules() {
+      const rules = document.getElementById('rulesContent');
+      rules.classList.toggle('hidden');
+    }
+
+    window.onload = init;
+  </script>
+</body>
+</html>
